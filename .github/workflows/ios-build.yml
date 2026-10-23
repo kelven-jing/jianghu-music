@@ -1,0 +1,38 @@
+name: Build iOS app
+
+on:
+  push:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-build.yml"
+  pull_request:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - name: 下载本项目代码
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: 生成 Xcode 工程
+        run: |
+          git clone --depth 1 --branch 2.46.0 https://github.com/yonaskolb/XcodeGen.git /tmp/XcodeGen
+          cd /tmp/XcodeGen
+          swift run -c release xcodegen generate --spec "$GITHUB_WORKSPACE/ios/project.yml" --project "$GITHUB_WORKSPACE/ios"
+
+      - name: 编译 iPhone 模拟器版本
+        run: |
+          xcodebuild \
+            -project ios/JianghuMusic.xcodeproj \
+            -scheme JianghuMusic \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            build

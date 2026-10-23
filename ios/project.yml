@@ -1,0 +1,22 @@
+name: JianghuMusic
+
+options:
+  bundleIdPrefix: com.kelvenjing
+
+targets:
+  JianghuMusic:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+
+    sources:
+      - path: JianghuMusic
+
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kelvenjing.jianghumusic
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: 江湖音乐
+        INFOPLIST_KEY_UIBackgroundModes: audio
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
