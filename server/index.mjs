@@ -1,7 +1,9 @@
 import { createServer } from "node:http";
 import { createReadStream } from "node:fs";
-import { readdir, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
+
+import { parseLrc } from "./lyrics.mjs";
 
 const musicDir = process.env.MUSIC_DIR;
 const port = Number(process.env.PORT ?? 8787);
@@ -33,13 +35,27 @@ async function findAudioFiles(directory) {
       }
 
       const fileInfo = await stat(fullPath);
+      const baseName = path.basename(entry.name, extension);
+      const lyricsEntry = entries.find((candidate) => {
+  return (
+    candidate.isFile() &&
+    path.extname(candidate.name).toLowerCase() === ".lrc"
+  );
+});
 
+const lyricsPath = lyricsEntry
+  ? path.join(directory, lyricsEntry.name)
+  : null;
+
+const hasLyrics = lyricsPath !== null;
       return [
         {
           id: path.relative(musicDir, fullPath).split(path.sep).join("/"),
-          title: path.basename(entry.name, extension),
+          title: baseName,
           sizeBytes: fileInfo.size,
+          hasLyrics,
           fullPath,
+          lyricsPath: hasLyrics ? lyricsPath : null,
         },
       ];
     }),
@@ -64,6 +80,11 @@ function escapeHtml(value) {
 
 function formatBytes(sizeBytes) {
   return `${(sizeBytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function publicSong(song) {
+  const { fullPath, lyricsPath, ...safeSong } = song;
+  return safeSong;
 }
 
 function sendJson(response, statusCode, data) {
@@ -131,6 +152,14 @@ function sendAudio(request, response, song) {
   createReadStream(song.fullPath, { start, end }).pipe(response);
 }
 
+async function readLyrics(song) {
+  if (!song.lyricsPath) {
+    return [];
+  }
+
+  return parseLrc(await readFile(song.lyricsPath, "utf8"));
+}
+
 const server = createServer(async (request, response) => {
   try {
     const requestUrl = new URL(
@@ -149,7 +178,7 @@ const server = createServer(async (request, response) => {
 
     if (requestUrl.pathname === "/api/library") {
       return sendJson(response, 200, {
-        songs: songs.map(({ fullPath, ...song }) => song),
+        songs: songs.map(publicSong),
       });
     }
 
@@ -165,16 +194,36 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === "/api/lyrics") {
+      const songId = requestUrl.searchParams.get("id");
+      const song = songs.find((candidate) => candidate.id === songId);
+
+      if (!song) {
+        return sendJson(response, 404, { error: "歌曲不存在" });
+      }
+
+      return sendJson(response, 200, {
+        songId: song.id,
+        lines: await readLyrics(song),
+      });
+    }
+
     if (requestUrl.pathname === "/") {
       const items = songs
         .map((song) => {
           const source = `/api/audio?id=${encodeURIComponent(song.id)}`;
+          const lyricsLabel = song.hasLyrics ? "有歌词" : "无歌词";
 
           return `<li>
-            <button class="song" data-source="${escapeHtml(source)}">
+            <button
+              class="song"
+              data-id="${escapeHtml(song.id)}"
+              data-source="${escapeHtml(source)}"
+              data-title="${escapeHtml(song.title)}"
+            >
               ${escapeHtml(song.title)}
             </button>
-            <small>${formatBytes(song.sizeBytes)}</small>
+            <small>${formatBytes(song.sizeBytes)} · ${lyricsLabel}</small>
           </li>`;
         })
         .join("");
@@ -194,23 +243,83 @@ const server = createServer(async (request, response) => {
     li { margin: 10px 0; }
     button { font: inherit; cursor: pointer; }
     small { color: #666; margin-left: 8px; }
+    #lyrics { max-height: 280px; overflow-y: auto; padding: 12px; background: #f5f5f7; border-radius: 12px; }
+    #lyrics p { margin: 10px 0; color: #666; }
+    #lyrics p.active { color: #111; font-weight: 700; font-size: 1.05em; }
   </style>
   <body>
     <h1>江湖音乐</h1>
     <p id="now-playing">选择一首歌开始播放。共 ${songs.length} 首。</p>
     <audio id="player" controls preload="metadata"></audio>
+    <section>
+      <h2>歌词</h2>
+      <div id="lyrics">选择一首带歌词的歌曲。</div>
+    </section>
+    <h2>音乐库</h2>
     <ol>${items}</ol>
     <script>
       const player = document.querySelector("#player");
       const status = document.querySelector("#now-playing");
+      const lyricsElement = document.querySelector("#lyrics");
+      let lyricLines = [];
+      let activeIndex = -1;
+
+      function renderLyrics(lines) {
+        lyricLines = lines;
+        activeIndex = -1;
+        lyricsElement.replaceChildren();
+
+        if (lines.length === 0) {
+          lyricsElement.textContent = "这首歌没有匹配的 LRC 歌词。";
+          return;
+        }
+
+        lines.forEach((line) => {
+          const element = document.createElement("p");
+          element.textContent = line.text;
+          lyricsElement.append(element);
+        });
+      }
+
+      function updateActiveLyrics() {
+        const positionMs = player.currentTime * 1000;
+        let nextIndex = -1;
+
+        for (let index = 0; index < lyricLines.length; index += 1) {
+          if (lyricLines[index].timeMs > positionMs) {
+            break;
+          }
+
+          nextIndex = index;
+        }
+
+        if (nextIndex === activeIndex) {
+          return;
+        }
+
+        const elements = lyricsElement.querySelectorAll("p");
+        elements[activeIndex]?.classList.remove("active");
+        elements[nextIndex]?.classList.add("active");
+        elements[nextIndex]?.scrollIntoView({ block: "center", behavior: "smooth" });
+        activeIndex = nextIndex;
+      }
 
       document.querySelectorAll(".song").forEach((button) => {
-        button.addEventListener("click", () => {
+        button.addEventListener("click", async () => {
           player.src = button.dataset.source;
-          status.textContent = "正在播放：" + button.textContent.trim();
-          player.play();
+          status.textContent = "正在播放：" + button.dataset.title;
+          await player.play();
+
+          const response = await fetch(
+            "/api/lyrics?id=" + encodeURIComponent(button.dataset.id),
+          );
+          const data = await response.json();
+          renderLyrics(data.lines);
         });
       });
+
+      player.addEventListener("timeupdate", updateActiveLyrics);
+      player.addEventListener("seeked", updateActiveLyrics);
     </script>
   </body>
 </html>`);
