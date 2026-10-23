@@ -27,6 +27,7 @@ struct ContentView: View {
     @State private var songs: [Song] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @StateObject private var downloads = DownloadStore()
 
     var body: some View {
         NavigationStack {
@@ -62,23 +63,27 @@ struct ContentView: View {
                         )
                     } else {
                         ForEach(songs) { song in
-                            HStack {
-                                Image(systemName: "music.note")
-                                    .foregroundStyle(.pink)
+                            HStack(spacing: 12) {
+                                Image(systemName: downloads.isDownloaded(song) ? "arrow.down.circle.fill" : "music.note")
+                                    .foregroundStyle(downloads.isDownloaded(song) ? .green : .pink)
 
-                                VStack(alignment: .leading) {
+                                VStack(alignment: .leading, spacing: 3) {
                                     Text(song.title)
 
-                                    Text(formatSize(song.sizeBytes))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                    HStack(spacing: 5) {
+                                        Text(formatSize(song.sizeBytes))
+
+                                        if song.hasLyrics {
+                                            Image(systemName: "text.quote")
+                                        }
+                                    }
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                                 }
 
                                 Spacer()
 
-                                if song.hasLyrics {
-                                    Image(systemName: "text.quote")
-                                        .foregroundStyle(.secondary)
+                                downloadButton(for: song)
                                 }
                             }
                         }
@@ -119,6 +124,34 @@ struct ContentView: View {
                 songs = library.songs
             } catch {
                 errorMessage = "无法连接电脑。请确认手机和电脑在同一 Wi-Fi，且音乐服务正在运行。"
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func downloadButton(for song: Song) -> some View {
+        if downloads.isDownloaded(song) {
+            Text("已下载")
+                .font(.caption)
+                .foregroundStyle(.green)
+        } else if downloads.downloadingIDs.contains(song.id) {
+            ProgressView()
+        } else {
+            Button("下载") {
+                download(song)
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    private func download(_ song: Song) {
+        errorMessage = nil
+
+        Task {
+            do {
+                try await downloads.download(song, from: serverAddress)
+            } catch {
+                errorMessage = error.localizedDescription
             }
         }
     }
