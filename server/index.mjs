@@ -333,6 +333,6 @@ const server = createServer(async (request, response) => {
   }
 });
 
-server.listen(port, "127.0.0.1", () => {
+server.listen(port, "0.0.0.0", () => {
   console.log(`江湖音乐服务已启动：http://127.0.0.1:${port}`);
 });
