@@ -1,0 +1,22 @@
+{
+  "name": "jianghu-music",
+  "version": "1.0.0",
+  "description": "ios端同步的音乐仓库(apple music太贵了……)",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server/index.mjs",
+    "dev": "node --watch server/index.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kelven-jing/jianghu-music.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/kelven-jing/jianghu-music/issues"
+  },
+  "homepage": "https://github.com/kelven-jing/jianghu-music#readme"
+}
