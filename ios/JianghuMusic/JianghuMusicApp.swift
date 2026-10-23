@@ -28,6 +28,7 @@ struct ContentView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @StateObject private var downloads = DownloadStore()
+    @StateObject private var player = PlayerStore()
 
     var body: some View {
         NavigationStack {
@@ -83,13 +84,54 @@ struct ContentView: View {
 
                                 Spacer()
 
-                                downloadButton(for: song)
+                                VStack(alignment: .trailing, spacing: 6) {
+                                    Button("播放") {
+                                        play(song)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+
+                                    downloadButton(for: song)
+                                }
                             }
                         }
                     }
                 }
             }
             .navigationTitle("江湖音乐")
+            .safeAreaInset(edge: .bottom) {
+                if let currentSong = player.currentSong {
+                    VStack(spacing: 8) {
+                        HStack {
+                            Image(systemName: "music.note")
+                                .foregroundStyle(.pink)
+
+                            Text(currentSong.title)
+                                .lineLimit(1)
+
+                            Spacer()
+
+                            Button {
+                                player.togglePlayback()
+                            } label: {
+                                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+
+                        if player.duration > 0 {
+                            Slider(
+                                value: Binding(
+                                    get: { player.currentTime },
+                                    set: { player.seek(to: $0) }
+                                ),
+                                in: 0...player.duration
+                            )
+                        }
+                    }
+                    .padding()
+                    .background(.ultraThinMaterial)
+                }
+            }
         }
     }
 
@@ -153,6 +195,23 @@ struct ContentView: View {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+
+    private func play(_ song: Song) {
+        let sourceURL: URL?
+
+        if downloads.isDownloaded(song) {
+            sourceURL = downloads.localURL(for: song)
+        } else {
+            sourceURL = downloads.audioURL(for: song, serverAddress: serverAddress)
+        }
+
+        guard let sourceURL else {
+            errorMessage = "电脑服务器地址不正确。"
+            return
+        }
+
+        player.play(song: song, sourceURL: sourceURL)
     }
 
     private func formatSize(_ bytes: Int) -> String {

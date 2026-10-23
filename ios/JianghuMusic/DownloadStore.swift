@@ -81,7 +81,7 @@ final class DownloadStore: ObservableObject {
         completedDownloadCount += 1
     }
 
-    private func audioURL(for song: Song, serverAddress: String) -> URL? {
+    func audioURL(for song: Song, serverAddress: String) -> URL? {
         let address = serverAddress
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
