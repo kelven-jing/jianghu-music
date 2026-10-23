@@ -81,6 +81,12 @@ final class DownloadStore: ObservableObject {
         completedDownloadCount += 1
     }
 
+    func syncMissingSongs(_ songs: [Song], from serverAddress: String) async throws {
+        for song in songs where !isDownloaded(song) {
+            try await download(song, from: serverAddress)
+        }
+    }
+
     func audioURL(for song: Song, serverAddress: String) -> URL? {
         apiURL(path: "/api/audio", song: song, serverAddress: serverAddress)
     }

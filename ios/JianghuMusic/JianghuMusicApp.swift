@@ -24,6 +24,9 @@ struct ContentView: View {
     @AppStorage("serverAddress")
     private var serverAddress = "http://10.201.30.6:8787"
 
+    @AppStorage("automaticSyncEnabled")
+    private var automaticSyncEnabled = true
+
     @State private var songs: [Song] = []
     @State private var lyricLines: [LyricLine] = []
     @State private var isLoading = false
@@ -49,6 +52,8 @@ struct ContentView: View {
                         }
                     }
                     .disabled(isLoading)
+
+                    Toggle("打开时自动同步新增歌曲", isOn: $automaticSyncEnabled)
 
                     if let errorMessage {
                         Text(errorMessage)
@@ -179,6 +184,10 @@ struct ContentView: View {
 
                 let library = try JSONDecoder().decode(LibraryResponse.self, from: data)
                 songs = library.songs
+
+                if automaticSyncEnabled {
+                    try await downloads.syncMissingSongs(library.songs, from: serverAddress)
+                }
             } catch {
                 errorMessage = "无法连接电脑。请确认手机和电脑在同一 Wi-Fi，且音乐服务正在运行。"
             }
