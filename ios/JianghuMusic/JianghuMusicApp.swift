@@ -84,7 +84,6 @@ struct ContentView: View {
                                 Spacer()
 
                                 downloadButton(for: song)
-                                }
                             }
                         }
                     }
