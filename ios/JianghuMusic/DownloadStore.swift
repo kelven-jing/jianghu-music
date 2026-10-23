@@ -82,11 +82,19 @@ final class DownloadStore: ObservableObject {
     }
 
     func audioURL(for song: Song, serverAddress: String) -> URL? {
+        apiURL(path: "/api/audio", song: song, serverAddress: serverAddress)
+    }
+
+    func lyricsURL(for song: Song, serverAddress: String) -> URL? {
+        apiURL(path: "/api/lyrics", song: song, serverAddress: serverAddress)
+    }
+
+    private func apiURL(path: String, song: Song, serverAddress: String) -> URL? {
         let address = serverAddress
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
 
-        guard var components = URLComponents(string: address + "/api/audio") else {
+        guard var components = URLComponents(string: address + path) else {
             return nil
         }
 

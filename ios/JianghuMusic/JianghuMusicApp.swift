@@ -25,6 +25,7 @@ struct ContentView: View {
     private var serverAddress = "http://10.201.30.6:8787"
 
     @State private var songs: [Song] = []
+    @State private var lyricLines: [LyricLine] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
     @StateObject private var downloads = DownloadStore()
@@ -92,6 +93,21 @@ struct ContentView: View {
 
                                     downloadButton(for: song)
                                 }
+                            }
+                        }
+                    }
+                }
+
+                if player.currentSong != nil {
+                    Section("同步歌词") {
+                        if lyricLines.isEmpty {
+                            Text("这首歌没有可用歌词，或电脑暂时未连接。")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(lyricLines) { line in
+                                Text(line.text)
+                                    .fontWeight(isCurrentLyric(line) ? .bold : .regular)
+                                    .foregroundStyle(isCurrentLyric(line) ? .primary : .secondary)
                             }
                         }
                     }
@@ -212,6 +228,47 @@ struct ContentView: View {
         }
 
         player.play(song: song, sourceURL: sourceURL)
+        loadLyrics(for: song)
+    }
+
+    private func loadLyrics(for song: Song) {
+        lyricLines = []
+
+        guard let url = downloads.lyricsURL(for: song, serverAddress: serverAddress) else {
+            return
+        }
+
+        Task {
+            do {
+                let (data, response) = try await URLSession.shared.data(from: url)
+                guard let httpResponse = response as? HTTPURLResponse,
+                      httpResponse.statusCode == 200 else {
+                    return
+                }
+
+                let lyrics = try JSONDecoder().decode(LyricsResponse.self, from: data)
+                guard lyrics.songId == song.id else {
+                    return
+                }
+
+                lyricLines = lyrics.lines
+            } catch {
+                lyricLines = []
+            }
+        }
+    }
+
+    private func isCurrentLyric(_ line: LyricLine) -> Bool {
+        guard let index = lyricLines.firstIndex(of: line) else {
+            return false
+        }
+
+        let nextTime = lyricLines.indices.contains(index + 1)
+            ? lyricLines[index + 1].timeMs
+            : Int.max
+        let currentTimeMs = Int(player.currentTime * 1000)
+
+        return line.timeMs <= currentTimeMs && currentTimeMs < nextTime
     }
 
     private func formatSize(_ bytes: Int) -> String {
